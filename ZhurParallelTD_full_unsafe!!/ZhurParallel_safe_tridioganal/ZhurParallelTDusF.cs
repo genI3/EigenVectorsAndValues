@@ -133,6 +133,24 @@ namespace ZhurParallelTDusF
             });
 
         }
+
+        static void NormVectorMatrixBDTemp(BigDouble* d, int n, double* vector, bool up)
+        {
+            Parallel.For(0, n, j =>
+            {
+                BigDouble temp = new BigDouble(0.0, 1);
+
+                for (BigDouble* st = d + j, sp = st + (n - 1) * n + 1; st < sp; st += n)
+                    temp += BigDouble.Pow(*st, 2);
+
+                temp = BigDouble.Sqrt(temp);
+
+                if (up)
+                    vector[j] = (double)(*(d + j) / temp);                
+                else
+                    vector[j] = (double)(*(d + j + (n - 1) * n) / temp);                 
+            });
+        }
         #endregion
 
         #region FormANk
@@ -176,23 +194,19 @@ namespace ZhurParallelTDusF
         /// <param name="l2"></param>
         /// <param name="n1"></param>
         /// <param name="n2"></param>
-        static void FormANkXxY(double e1, double e2, double d, double* D, double* a, double* v1,
-                               double* v2, double* l, int n1, int n2)
+        static void FormANkXxY(double e1, double e2, double* a, double* v1,
+                               double* v2, int n1, int n2)
         {
-            for(double* st = a, sp = a + n1, _d = D, _l = l; st < sp; st++, v1++, _d++, _l++)            
+            Parallel.For(0, n1, i =>
                 {
-                    *st = e1 * *v1;                    
-                    *_d = *_l;
-                }
+                    a[i] = e1 * v1[i];
+                });
 
-            for (double* st = a + n1, sp = a + n1 + n2, _d = D + n1, _l = l + n1; st < sp; st++, v2++, _d++, _l++)
-                {
-                    *st = e2 * *v2;                    
-                    *_d = *_l;
-                }
+            Parallel.For(n1, n1 + n2, i =>
+            {
+                a[i] = e2 * v2[i - n1];
+            });
 
-            D[n1 + n2] = d;
-            a[n1 + n2] = d;
         }
 
         /// <summary>
@@ -211,8 +225,6 @@ namespace ZhurParallelTDusF
                     temp += AN[m] * V[m * N + i];
                 tempA[i] = temp;
             });
-
-            tempA[N] = AN[N];
         }
 
         /// <summary>
@@ -233,10 +245,19 @@ namespace ZhurParallelTDusF
                 D[i] = L[i];
             });
 
-            AN[N - 1] = d;
             D[N - 1] = d;
         }
         #endregion
+
+        static void FormDkXxY(double* D, double* l, int n, double d)
+        {
+            Parallel.For(0, n - 1, i =>
+            {
+                D[i] = l[i];
+            });
+
+            D[n - 1] = d;
+        }
 
         #region EigenValue
         /// <summary>
@@ -264,6 +285,20 @@ namespace ZhurParallelTDusF
             //ограниченно-диагональной матрицы.            
             EigenVector(vector, lambda, A, D, n, up);
         }
+
+        static void EigenValueTemp(double* D, double* A, int n, double* lambda, double epsilon)
+        {
+
+            //Находим собственные значения на внутренних отрезках.                        
+            Parallel.For(0, n - 2, i =>
+            {
+                lambda[i + 1] = EigenValueInterval(D, A, i, n, epsilon);
+            });
+
+            //Находим собственные значения на граничных интервалах.     
+            EigenValueInfinit(D, A, lambda, n - 1);
+        }
+
 
         /// <summary>
         /// Метод рассчитывает собственные вектора и числа заданной ограниченнно-диагональной матрицы с указанной точностью.
@@ -424,16 +459,75 @@ namespace ZhurParallelTDusF
 
                 for (double* i = D, _a = A, i_end = D + n - 1; i < i_end; i++, _a++)
                 {
-                    var t = Sqr(*_a / (lambda[j] - *i));
+
+                    var tt = (lambda[j] - *i);
+                    double t;
+                    if (tt == 0)
+                        t = 0;
+                    else
+                        t = Sqr(*_a / tt);
+
                     temp += t;
                 }
 
                 if (up)
-                    V[j] = *A / ((lambda[j] - *D) * Math.Sqrt(temp));
+                {
+                    var del = lambda[j] - *D;
+                    if (del == 0)
+                        V[j] = 0;
+                    else
+                        V[j] = *A / (del * Math.Sqrt(temp));
+                }
                 else
                     V[j] = Math.Sqrt(1.0d / temp);                
             });
             
+        }
+
+        static void EigenVectorTemp(double* V, double* lambda, double* E, double* D, int n, bool up)
+        {
+            //Parallel.For(0, n, j =>
+            //{
+            //    double temp = 1.0d;
+
+            //    for (double* i = D, _a = A, i_end = D + n - 1; i < i_end; i++, _a++)
+            //    {
+            //        double t = Sqr(*_a / (lambda[j] - *i));
+            //        temp += t;
+            //    }
+
+            //    if (up)
+            //        V[j] = *A / ((lambda[j] - *D) * Math.Sqrt(temp));
+            //    else
+            //        V[j] = A[n - 2] / ((lambda[j] - D[n - 2]) * Math.Sqrt(temp));
+            //});
+
+            //По скольку, при вычислении собственных векторов
+            //трехдиагональной матрицы, значения временно могут
+            //выходить за рамки значений типа Double,
+            //создаем матрицу специального типа.
+            BigDouble[,] vector = new BigDouble[n, n];
+
+            //Вычисляем собственные вектора
+            //трехдиагональной матрицы в BigDouble
+            //Parallel.For(0, n, j =>
+            for (int j = 0; j < n ; j++)
+            {
+                vector[0, j] = new BigDouble(1.0d, -100);
+                vector[1, j] = ((BigDouble)(lambda[j] - *D)) * vector[0, j] / (BigDouble)(*E);
+
+
+                double* d = D + 1, e = E;
+                fixed (BigDouble* v = &vector[2, j])
+                    for (BigDouble* st = v, sp = v + (n - 3) * n + 1; st < sp; st += n, d++, e++)
+                    {
+                        *st = ((BigDouble)(lambda[j] - *d) * *(st - n) - (BigDouble)(*e) * *(st - n - n)) / (BigDouble)(*(e + 1));
+                    }
+            }//);
+
+            //Нормируем вектора
+            fixed (BigDouble* v = &vector[0, 0])
+                NormVectorMatrixBDTemp(v, n, V, up);
         }
 
         private static double eigenVectorSubroutine(double lambda, double* A, double* D, int n, double* l)
@@ -555,7 +649,7 @@ namespace ZhurParallelTDusF
         static void vectorsAdd(double* AN, double* A, double* lambda, double* D, int N)
         {
             //Заполняем массив последнего столбца
-            Parallel.For(0, N, i =>
+            Parallel.For(0, N - 1, i =>
             {
                 AN[i] = A[i * N + N - 1];
             });
@@ -834,12 +928,16 @@ namespace ZhurParallelTDusF
                     double[] L = new double[del + i];
                     double[] V = new double[del + i];
                     fixed (double* l = L, v = V, l_old = lambdas[ni - 1], v_old = vectors[ni - 1])
-                        EigenValueAndVectorAddTemp(del + i, i == 2, l, l_old, v, v_old, e[n - tale - 2 + i], 
+                        EigenValueAndVectorAddTemp(del + i, i == tale, l, l_old, v, v_old, e[n - tale - 2 + i], 
                                                    d[n - tale - 1 + i], epsilon);
 
                     lambdas[ni - 1] = L;
-                    vectors[ni - 1] = V;
+                    if (i != tale)
+                        vectors[ni - 1] = V;
                 }
+
+                fixed (double* newL = lambdas[ni - 1], newV = vectors[ni - 1], _e = &e[n - (del + tale)], _d = &d[n - (del + tale)])
+                    EigenVectorTemp(newV, newL, _e, _d, del + tale, true);
             }
 
             //Обновляем значения
@@ -864,9 +962,11 @@ namespace ZhurParallelTDusF
                     newVectors[j] = new double[del];
                     fixed (double* oldL1 = lambdas[k], oldV1 = vectors[k],
                            oldL2 = lambdas[k + 1], oldV2 = vectors[k + 1],
-                           newL = newLambdas[j], newV = newVectors[j])
+                           newL = newLambdas[j])
                         EigenValueAndVectorXxX(d[poz], e[poz - 1], e[poz], i, del, oldL1, oldV1, oldL2, 
-                                               oldV2, newL, newV, epsilon, (j + 1) % 2 == 0);                   
+                                               oldV2, newL, epsilon);
+                    fixed (double* newL = newLambdas[j], newV = newVectors[j], _e = &e[i], _d=&d[i])
+                        EigenVectorTemp(newV, newL, _e, _d, del, (j + 1) % 2 == 0);
 
                 }
 
@@ -874,6 +974,7 @@ namespace ZhurParallelTDusF
                 //то нужно совместить последнюю матрицу
                 //размерности del с остатком
                 if (ni % 2 != 0 && tale > 0)
+                {
                     if (tale < 3)
                     {
                         //Посчитать остатток методом Add
@@ -881,12 +982,13 @@ namespace ZhurParallelTDusF
                         {
                             double[] L = new double[del + i];
                             double[] V = new double[del + i];
-                            fixed (double* l = L, v = V, l_old = lambdas[ni - 1], v_old = vectors[ni - 1])
-                                EigenValueAndVectorAddTemp(del, i == 2, l, l_old, v, v_old, e[n - tale - 2 + i],
+                            fixed (double* l = L, v = V, l_old = newLambdas[ni - 1], v_old = newVectors[ni - 1])
+                                EigenValueAndVectorAddTemp(del + i, i == tale, l, l_old, v, v_old, e[n - tale - 2 + i],
                                                            d[n - tale - 1 + i], epsilon);
 
                             newLambdas[ni - 1] = L;
-                            newVectors[ni - 1] = V;
+                            if (i != tale)
+                                newVectors[ni - 1] = V;
                         }
                     }
                     else
@@ -896,15 +998,19 @@ namespace ZhurParallelTDusF
                         //Посчитать как 
                         fixed (double* oldL = lambdas[lambdas.Length - 1], oldV = vectors[vectors.Length - 1],
                                newL = newLambdas[ni - 1], newV = newVectors[ni - 1],
-                               L = tempL, V = tempV)
+                               L = tempL)
                             EigenValueAndVectorXxY(d[n - tale], e[n - tale - 1], e[n - tale], del, tale - 1,
-                                                   oldL, oldV, newL, newV, L, V, epsilon);
+                                                   newL, newV, oldL, oldV, L, epsilon);
 
                         newLambdas[ni - 1] = tempL;
-                        newVectors[ni - 1] = tempV;
+
                     }
 
-                lambdas = newLambdas;
+                    fixed (double* newL = newLambdas[ni - 1], newV = newVectors[ni - 1], _e = &e[n - (del + tale)], _d = &d[n - (del + tale)])
+                        EigenVectorTemp(newV, newL, _e, _d, del + tale, true);
+                }
+
+                lambdas = newLambdas;                
                 vectors = newVectors;
 
                 //Обновляем значения
@@ -944,19 +1050,26 @@ namespace ZhurParallelTDusF
         /// <param name="newV"></param>
         /// <param name="epsilon"></param>
         static void EigenValueAndVectorXxY(double d, double e1, double e2, int n1, int n2, double* oldL1, double* oldV1, 
-                                           double* oldL2, double* oldV2, double* newL, double* newV, double epsilon)
+                                           double* oldL2, double* oldV2, double* newL, double epsilon)
         {
-            var AN = new double[n1 + n2 + 1];
+            var AN = new double[n1 + n2];
             var D = new double[n1 + n2 + 1];
 
             var tempL = new double[n1 + n2];
-            FormL(tempL, oldL1, oldL2, n1, n2);
 
-            fixed (double* a = AN, _d = D, l = tempL)
-                FormANkXxY(e1, e2, d, _d, a, oldV1, oldV2, l, n1, n2);
+            fixed (double* l = tempL)
+                FormL(l, oldL1, oldL2, n1, n2);
+
+            fixed (double* a = AN)
+                FormANkXxY(e1, e2, a, oldV1, oldV2, n1, n2);
+
+            Array.Sort(tempL, AN);
+
+            fixed (double* l = tempL, _d = D)
+                FormDkXxY(_d, l, n1 + n2 + 1, d);
 
             fixed (double* _d = D, _a = AN)
-                EigenValue(_d, _a, n1 + n2 + 1, newL, newV, epsilon, true);
+                EigenValueTemp(_d, _a, n1 + n2 + 1, newL, epsilon);
 
         }
 
@@ -976,23 +1089,33 @@ namespace ZhurParallelTDusF
         /// <param name="epsilon"></param>
         /// <param name="up"></param>
         static void EigenValueAndVectorXxX(double d, double e1, double e2, int start_poz, int n, double* oldL1, double* oldV1, 
-                                           double* oldL2, double* oldV2, double* newL, double* newV, double epsilon, bool up)
+                                           double* oldL2, double* oldV2, double* newL, double epsilon)
         {
             int n1 = (n - 1) / 2;
 
-            var AN = new double[n];
+            var AN = new double[n - 1];
             var D = new double[n];
 
             var tempL = new double[n - 1];
 
-            FormL(tempL, oldL1, oldL2, n1, n1);
+            fixed (double* l = tempL)
+                FormL(l, oldL1, oldL2, n1, n1);                       
 
-            fixed (double* a = AN, _d = D, l = tempL)
-                FormANkXxY(e1, e2, d, _d, a, oldV1, oldV2, l, n1, n1);
+            fixed (double* a = AN)
+                FormANkXxY(e1, e2, a, oldV1, oldV2, n1, n1);
+
+            Array.Sort(tempL, AN);
+
+            fixed (double* l = tempL, _d = D)
+                FormDkXxY(_d, l, n, d);
 
             fixed (double* _d = D, _a = AN)
-                EigenValue(_d, _a, n, newL, newV, epsilon, up);
+                EigenValueTemp(_d, _a, n, newL, epsilon);
         }
+
+
+        
+
 
         /// <summary>
         /// 
@@ -1002,19 +1125,17 @@ namespace ZhurParallelTDusF
         /// <param name="L2"></param>
         /// <param name="n1"></param>
         /// <param name="n2"></param>
-        static void FormL(double[] L, double* L1, double* L2, int n1, int n2)
+        static void FormL(double* L, double* L1, double* L2, int n1, int n2)
         {
             Parallel.For(0, n1, i =>
-            {
-                Interlocked.Exchange(ref L[i], L1[i]);                
+            { 
+                L[i] = L1[i];
             });
 
             Parallel.For(n1, n1 + n2, i =>
-            {
-                Interlocked.Exchange(ref L[i], L2[i - n1]);                
-            });
-
-            Array.Sort(L);
+            {               
+                L[i] = L2[i - n1];
+            });            
         }
 
         /// <summary>
@@ -1032,7 +1153,7 @@ namespace ZhurParallelTDusF
         static void EigenValueAndVectorAddTemp(int n, bool up, double* lambda, double* l_old, double* vector, double* v_old, double e, double d, double epsilon)
         {
             //Выделяем последний (новый) столбец.
-            var AN = new double[n];
+            var AN = new double[n - 1];
 
             var D = new double[n];
 
@@ -1175,14 +1296,14 @@ namespace ZhurParallelTDusF
             //матрицы главной диагонали
             var D = new double[N];
             //Выделяем последний (новый) столбец.
-            var AN = new double[N];
+            var AN = new double[N - 1];
 
             //Заполняем
             fixed(double* a = A, _AN = AN, d = D, l = lambda)
                 vectorsAdd(_AN, a, l, d, N);            
             D[N - 1] = A[N - 1, N - 1];
             
-            var tempAN = new double[N];
+            var tempAN = new double[N - 1];
 
             //Вычисляем ограниченно-диагональную матрицу
             fixed (double* v = vector, _AN = AN, tA = tempAN)
