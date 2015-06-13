@@ -61,7 +61,7 @@ namespace ZhurParallelTDusF
         /// <param name="newV"></param>
         /// <param name="epsilon"></param>
         /// <param name="up"></param>
-        static void EigenValueAndVectorXxX(double d, double e1, double e2, int start_poz, int n, double* oldL1, double* oldV1,
+        static void EigenValueAndVectorXxX(double d, double e1, double e2, int n, double* oldL1, double* oldV1,
                                            double* oldL2, double* oldV2, double* newL, double epsilon)
         {
             int n1 = (n - 1) / 2;
@@ -194,27 +194,82 @@ namespace ZhurParallelTDusF
             //трехдиагональной матрицы, значения временно могут
             //выходить за рамки значений типа Double,
             //создаем матрицу специального типа.
-            BigDouble[,] vector = new BigDouble[n, n];
+            //BigDouble[,] vector = new BigDouble[n, n];
+            var vector = stackalloc double[n * n];
 
             //Вычисляем собственные вектора
             //трехдиагональной матрицы в BigDouble
             Parallel.For(0, n, j =>
+            //for (int j = 0; j < n; j++)
             {
-                vector[0, j] = new BigDouble(1.0d, -100);
-                vector[1, j] = ((BigDouble)(lambda[j] - *D)) * vector[0, j] / (BigDouble)(*E);
+                //vector[0, j] = new BigDouble(1.0d, -190);
+                //vector[1, j] = ((BigDouble)(lambda[j] - *D)) * vector[0, j] / (BigDouble)(*E);
 
 
-                double* d = D + 1, e = E;
-                fixed (BigDouble* v = &vector[2, j])
-                    for (BigDouble* st = v, sp = v + (n - 3) * n + 1; st < sp; st += n, d++, e++)
+                //double* d = D + 1, e = E;
+                //fixed (BigDouble* v = vector)
+                //    for (BigDouble* st = v + n + n + n + j, sp = v + (n - 3) * n + 1; st < sp; st += n, d++, e++)
+                //    {
+                //        var s1 = new BigDouble(lambda[j] - *d, 0);
+                //        var s2 = new BigDouble(*e, 0);
+                //        var s3 = new BigDouble(*(e + 1), 0);
+                //        //var s1 = new BigDouble((lambda[j] - *d).ToString());
+                //        //var s2 = new BigDouble((*e).ToString());
+                //        //var s3 = new BigDouble((*(e + 1)).ToString());
+                //        *st = (s1 * *(st - n) - s2 * *(st - n - n)) / s3;
+                //    }
+
+                var v = vector + n * (n - 3) + j;
+                var e = E + n - 3;
+                var d = D + n - 2;
+
+                *(v + n + n) = 1.0d;
+                *(v + n) = (lambda[j] - *(d + 1)) / *(e + 1);
+
+                for (; v >= vector; v -= n, e--, d--)
+                {
+                    var temp = ((lambda[j] - *d) * *(v + n)) / *e - (*(e + 1) * *(v + n + n)) / *e;
+                    /*
+                     * 
+                     *  Различные варианты нужно добавить. 
+                     * 
+                     * 
+                     */
+                    if (*(v + n) > 10000.0d)
                     {
-                        *st = ((BigDouble)(lambda[j] - *d) * *(st - n) - (BigDouble)(*e) * *(st - n - n)) / (BigDouble)(*(e + 1));
+                        for (var v1 = vector + n * (n - 1) + j; v1 > v; v1 -= n)
+                            *v1 /= temp;
+
+                        *v = 1.0d;
                     }
+                    else
+                        *v = temp;
+                }
+
             });
 
             //Нормируем вектора
-            fixed (BigDouble* v = &vector[0, 0])
-                NormVectorMatrixBDnew(v, n, V, up);
+            //fixed (BigDouble* v = &vector[0, 0])
+            //    NormVectorMatrixBDnew(v, n, V, up);
+            NormVector(vector, n, V, up);
+        }
+
+        static void NormVector(double* vector, int n, double* V, bool up)
+        {
+            Parallel.For(0, n, j =>
+                {
+                    var temp = 0.0d;
+
+                    for (double* st = vector + j, sp = vector + n * n; st < sp; st += n)
+                        temp += Sqr(*st);
+
+                    temp = Math.Sqrt(temp);
+
+                    if (up)
+                        V[j] = *(vector + j) / temp;
+                    else
+                        V[j] = *(vector + n * (n - 1) + j) / temp;
+                });
         }
         #endregion
 
@@ -230,7 +285,7 @@ namespace ZhurParallelTDusF
         {
             Parallel.For(0, n, j =>
             {
-                BigDouble temp = new BigDouble(0.0, 1);
+                BigDouble temp = new BigDouble(0.0, 0);
 
                 for (BigDouble* st = d + j, sp = st + (n - 1) * n + 1; st < sp; st += n)
                     temp += BigDouble.Pow(*st, 2);
@@ -389,10 +444,11 @@ namespace ZhurParallelTDusF
                     fixed (double* oldL1 = lambdas[k], oldV1 = vectors[k],
                            oldL2 = lambdas[k + 1], oldV2 = vectors[k + 1],
                            newL = newLambdas[j])
-                        EigenValueAndVectorXxX(d[poz], e[poz - 1], e[poz], i, del, oldL1, oldV1, oldL2,
+                        EigenValueAndVectorXxX(d[poz], e[poz - 1], e[poz], del, oldL1, oldV1, oldL2,
                                                oldV2, newL, epsilon);
-                    fixed (double* newL = newLambdas[j], newV = newVectors[j], _e = &e[i], _d = &d[i])
-                        EigenVectorsNew(newV, newL, _e, _d, del, (j + 1) % 2 == 0);
+                    if (del != n)
+                        fixed (double* newL = newLambdas[j], newV = newVectors[j], _e = &e[i], _d = &d[i])
+                            EigenVectorsNew(newV, newL, _e, _d, del, (j + 1) % 2 == 0);
 
                 }
 
@@ -432,8 +488,9 @@ namespace ZhurParallelTDusF
 
                     }
 
-                    fixed (double* newL = newLambdas[ni - 1], newV = newVectors[ni - 1], _e = &e[n - (del + tale)], _d = &d[n - (del + tale)])
-                        EigenVectorsNew(newV, newL, _e, _d, del + tale, true);
+                    if (del + tale != n)
+                        fixed (double* newL = newLambdas[ni - 1], newV = newVectors[ni - 1], _e = &e[n - (del + tale)], _d = &d[n - (del + tale)])
+                            EigenVectorsNew(newV, newL, _e, _d, del + tale, true);
                 }
 
                 lambdas = newLambdas;

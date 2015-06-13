@@ -114,14 +114,34 @@ namespace ZhurParallelTDusF
             }
 
             //S
-            double S = D + Sl - SL;
+            var S = D + Sl - SL;
+
+            var B = S * S;
+            var AC = SL * S + SLi - D * Sl - Sli + SA;
 
             //Дескриминант квадратного уравнения
-            double squareroot = Math.Sqrt(S * S + 4 * (SL * S + SLi - D * Sl - Sli + SA));
+            double squareroot = Math.Sqrt(B + 4 * AC);
 
+            if (B > 100 * AC)
+            {
+                if (-S > 0)
+                {
                     *Lambda = (S - squareroot) * 0.5d;
+                    Lambda[n] = (2 * AC) / ( S - squareroot);
+                }
+                else if (-S < 0)
+                {
+                    *Lambda = (2 * AC) / (S + squareroot);
                     Lambda[n] = (S + squareroot) * 0.5d;
                 }
+            }
+            else
+            {
+
+                *Lambda = (S - squareroot) * 0.5d;
+                Lambda[n] = (S + squareroot) * 0.5d;
+            }
+        }
         #endregion
         
         
