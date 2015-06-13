@@ -119,9 +119,9 @@ namespace ZhurParallelTDusF
             //Дескриминант квадратного уравнения
             double squareroot = Math.Sqrt(S * S + 4 * (SL * S + SLi - D * Sl - Sli + SA));
 
-            *Lambda = (S - squareroot) * 0.5d;
-            Lambda[n] = (S + squareroot) * 0.5d;
-        }
+                    *Lambda = (S - squareroot) * 0.5d;
+                    Lambda[n] = (S + squareroot) * 0.5d;
+                }
         #endregion
         
         
@@ -142,6 +142,9 @@ namespace ZhurParallelTDusF
             double L1 = d[k];
             double L2 = d[k + 1];
 
+            if (L2 - L1 == 0.0d)
+                return L1;
+
             double lambda = 0.0d;
 
             var tempA = stackalloc double[n - 1];
@@ -156,70 +159,41 @@ namespace ZhurParallelTDusF
             // 1 / log(2) ~ 3.32192809488736
             int N = (int)Math.Ceiling(_N * 3.32192809488736d);
 
-
-            //Если заданная точность больше значения
-            //точек интервала (N < 0)
-            if (N < 0)
+            while (N < 0)
             {
-                for (int x = 0; x < (int)Math.Ceiling(-_N) + 3; x++)
-                    epsilon *= 0.1d;
+                epsilon *= epsilon;
 
-                //Основной цикл нахождения собственного 
-                //значения на заданном интервале.
-                for (int j = 0; j < -N + 1; j++)
-                {
-                    //Предполагаемое значение.
-                    lambda = (L1 + L2) * 0.5d;
-
-                    double temp = d[n - 1];
-
-                    //Подставляем значение lambda в уравнение G(λ) = D + (A1*A1)/(λ-λ1) + (A2*A2)/(λ-λ2) +...+ (Ak*Ak)/(λ-λk),
-                    //где λi - собственное значение матрицы Bk, Ai - значение массива A.  
-
-                    for (double* _a = tempA, _a_end = tempA + n - 1, _d = d; _a < _a_end; _a++, _d++)
-                        temp += *_a / (lambda - *_d);
-
-                    //Если |G(λ) - λ| < epsilon - собственное число с точностью epsilon
-                    //найдено - завершение цикла.
-                    if (Math.Abs(temp - lambda) <= epsilon)
-                    {
-                        break;
-                    }
-
-                    //Иначе уменьшаем интервал в двое вправо или влево.
-                    if (temp - lambda > 0.0d)
-                        L1 = lambda;
-                    else
-                        L2 = lambda;
-                }
+                _N = Math.Log((L2 - L1) / epsilon);
+                N = (int)Math.Ceiling(_N * 3.32192809488736d);
             }
-            else
-                //Основной цикл нахождения собственного 
-                //значения на заданном интервале.
-                for (int j = 0; j < N + 1; j++)
-                {
-                    //Предполагаемое значение.
-                    lambda = (L2 + L1) * 0.5d;
+            
+            
+            //Основной цикл нахождения собственного 
+            //значения на заданном интервале.
+            for (int j = 0; j < N + 1; j++)
+            {
+                //Предполагаемое значение.
+                lambda = (L2 + L1) * 0.5d;
 
-                    double temp = d[n - 1];
+                double temp = d[n - 1];
 
-                    //Подставляем значение lambda в уравнение G(λ) = D + (A1*A1)/(λ-λ1) + (A2*A2)/(λ-λ2) +...+ (Ak*Ak)/(λ-λk),
-                    //где λi - собственное значение матрицы Bk, Ai - значение массива A.    
+                //Подставляем значение lambda в уравнение G(λ) = D + (A1*A1)/(λ-λ1) + (A2*A2)/(λ-λ2) +...+ (Ak*Ak)/(λ-λk),
+                //где λi - собственное значение матрицы Bk, Ai - значение массива A.    
 
-                    for (double* _a = tempA, _a_end = tempA + n - 1, _d = d; _a < _a_end; _a++, _d++)
-                        temp += *_a / (lambda - *_d);
+                for (double* _a = tempA, _a_end = tempA + n - 1, _d = d; _a < _a_end; _a++, _d++)
+                    temp += *_a / (lambda - *_d);
 
-                    //Если |G(λ) - λ| < epsilon - собственное число с точностью epsilon
-                    //найдено - завершение цикла.
-                    if (Math.Abs(temp - lambda) <= epsilon)
-                        break;
+                //Если |G(λ) - λ| < epsilon - собственное число с точностью epsilon
+                //найдено - завершение цикла.
+                if (Math.Abs(temp - lambda) <= epsilon)
+                    break;
 
-                    //Иначе уменьшаем интервал в двое вправо или влево.
-                    if (temp - lambda > 0.0d)
-                        L1 = lambda;
-                    else
-                        L2 = lambda;
-                }
+                //Иначе уменьшаем интервал в двое вправо или влево.
+                if (temp - lambda > 0.0d)
+                    L1 = lambda;
+                else
+                    L2 = lambda;
+            }
 
             //Возвращаем найденное собственное значение.
             return lambda;

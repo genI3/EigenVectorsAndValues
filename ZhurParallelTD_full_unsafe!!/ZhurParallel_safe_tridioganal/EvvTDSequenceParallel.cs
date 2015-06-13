@@ -124,8 +124,8 @@ namespace ZhurParallelTDusF
 
                     var tt = (lambda[j] - *i);
                     double t;
-                    if (tt == 0)
-                        t = 0;
+                    if (tt == 0.0d)
+                        t = 0.0d;
                     else
                         t = Sqr(*_a / tt);
 
@@ -135,8 +135,8 @@ namespace ZhurParallelTDusF
                 if (up)
                 {
                     var del = lambda[j] - *D;
-                    if (del == 0)
-                        V[j] = 0;
+                    if (del == 0.0d)
+                        V[j] = 0.0d;
                     else
                         V[j] = *A / (del * Math.Sqrt(temp));
                 }

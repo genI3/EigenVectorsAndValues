@@ -15,7 +15,7 @@ namespace ZhurParallelTDusF
         /// <param name="lambda">Указатель на массив собственных чисел.</param>
         /// <param name="D">Указатель на массив, составляющий главную диагональ.</param>
         /// <param name="n">Размерность матрицы.</param>
-        static void FormANkAdd(double* AN, double* A, double* lambda, double* D, int n)
+        static void FormANkAdd(double* AN, double* A, double* lambda, double* D, int n, double* v)
         {
             //Заполняем массив последнего столбца
             Parallel.For(0, n - 1, i =>
@@ -28,6 +28,9 @@ namespace ZhurParallelTDusF
             {
                 D[i] = lambda[i];
             });
+
+            //Вычисляем ограниченно-диагональную матрицу
+            FormAColumnAdd(AN, v, n - 1);
         }
 
         /// <summary>
@@ -37,14 +40,21 @@ namespace ZhurParallelTDusF
         /// <param name="V">Указатель на матрицу собственных векторов матрицы размерности N-1, вырезанной из исходной.</param>
         /// <param name="tempA">Указатель на временный массив.</param>
         /// <param name="n">Размерность матрицы.</param>
-        static void FormAColumnAdd(double* AN, double* V, double* tempA, int n)
+        static void FormAColumnAdd(double* AN, double* V, int n)
         {
+            var tempA = stackalloc double[n - 1];
+
             Parallel.For(0, n, i =>
             {
                 var temp = 0.0d;
                 for (int m = 0; m < n; m++)
                     temp += AN[m] * V[m * n + i];
                 tempA[i] = temp;
+            });
+
+            Parallel.For(0, n, i =>
+            {
+                AN[i] = tempA[i];
             });
         }
         #endregion
@@ -155,16 +165,9 @@ namespace ZhurParallelTDusF
             var AN = new double[N - 1];
 
             //Заполняем
-            fixed (double* a = A, _AN = AN, d = D, l = lambda)
-                FormANkAdd(_AN, a, l, d, N);
+            fixed (double* a = A, _AN = AN, d = D, l = lambda, v = vector)
+                FormANkAdd(_AN, a, l, d, N, v);
             D[N - 1] = A[N - 1, N - 1];
-
-            var tempAN = new double[N - 1];
-
-            //Вычисляем ограниченно-диагональную матрицу
-            fixed (double* v = vector, _AN = AN, tA = tempAN)
-                FormAColumnAdd(_AN, v, tA, N - 1);
-            AN = tempAN;
 
             //Вычисляем собственные числа и вектора
             //ограниченно-диагональной матрицы.

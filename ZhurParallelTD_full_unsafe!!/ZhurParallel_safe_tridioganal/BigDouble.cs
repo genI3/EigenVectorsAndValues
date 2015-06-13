@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace ZhurParallelTDusF
 {
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Explicit, Size = 12)]
     public struct BigDouble
     {
         //Число от 1.0 до 9.99
@@ -32,7 +32,7 @@ namespace ZhurParallelTDusF
         /// <param name="S"></param>
         public BigDouble(string S)
         {
-            string[] sa = S.Split(new char[] { 'E' });
+            var sa = S.Split(new char[] { 'E' });            
 
             this.x = Double.Parse(sa[0]);
             if (sa.Length > 1)
@@ -174,7 +174,7 @@ namespace ZhurParallelTDusF
 
         public static explicit operator BigDouble(double d)
         {
-            return new BigDouble(d.ToString());
+                return new BigDouble(d.ToString());           
         }
 
         public static explicit operator double(BigDouble d)
@@ -256,8 +256,9 @@ namespace ZhurParallelTDusF
                 d.X *= d.X;
             else
             {
-                for (int i = 0; i < n; i++)
-                    d.X *= d.X;
+                //for (int i = 0; i < n; i++)
+                //    d.X *= d.X;
+                d.X = Math.Pow(d.X, n);
             }
 
             while (Math.Abs(d.X) > 9.99d)
