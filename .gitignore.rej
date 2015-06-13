@@ -1,0 +1,3 @@
+diff a/.gitignore b/.gitignore	(rejected hunks)
+@@ -0,0 +1 @@
++NewTest/NewTest/bin/x64/Release/NewTest.vshost.exe.manifest
