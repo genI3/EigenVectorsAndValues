@@ -193,57 +193,67 @@ namespace ZhurParallelTDusF
             //По скольку, при вычислении собственных векторов
             //трехдиагональной матрицы, значения временно могут
             //выходить за рамки значений типа Double,
-            //создаем матрицу специального типа.
-            //BigDouble[,] vector = new BigDouble[n, n];
+            //создаем матрицу специального типа.            
             var vector = stackalloc double[n * n];
 
             //Вычисляем собственные вектора
-            //трехдиагональной матрицы в BigDouble
+            //трехдиагональной матрицы с
+            //помощью метода прогонки
             Parallel.For(0, n, j =>
             //for (int j = 0; j < n; j++)
             {
-                //vector[0, j] = new BigDouble(1.0d, -190);
-                //vector[1, j] = ((BigDouble)(lambda[j] - *D)) * vector[0, j] / (BigDouble)(*E);
+                var d = 2e-6;
 
+                var ep = stackalloc double[n];
+                var eta = stackalloc double[n + 1];
 
-                //double* d = D + 1, e = E;
-                //fixed (BigDouble* v = vector)
-                //    for (BigDouble* st = v + n + n + n + j, sp = v + (n - 3) * n + 1; st < sp; st += n, d++, e++)
-                //    {
-                //        var s1 = new BigDouble(lambda[j] - *d, 0);
-                //        var s2 = new BigDouble(*e, 0);
-                //        var s3 = new BigDouble(*(e + 1), 0);
-                //        //var s1 = new BigDouble((lambda[j] - *d).ToString());
-                //        //var s2 = new BigDouble((*e).ToString());
-                //        //var s3 = new BigDouble((*(e + 1)).ToString());
-                //        *st = (s1 * *(st - n) - s2 * *(st - n - n)) / s3;
-                //    }
+                ep[1] = *E / (*D - lambda[j]);
+                eta[1] = d / (*D - lambda[j]);
 
-                var v = vector + n * (n - 3) + j;
-                var e = E + n - 3;
-                var d = D + n - 2;
-
-                *(v + n + n) = 1.0d;
-                *(v + n) = (lambda[j] - *(d + 1)) / *(e + 1);
-
-                for (; v >= vector; v -= n, e--, d--)
+                for (int i = 1; i < n - 1; i++) 
                 {
-                    var temp = ((lambda[j] - *d) * *(v + n)) / *e - (*(e + 1) * *(v + n + n)) / *e;
-                    /*
-                     * 
-                     *  Различные варианты нужно добавить. 
-                     * 
-                     * 
-                     */
-                    if (*(v + n) > 10000.0d)
-                    {
-                        for (var v1 = vector + n * (n - 1) + j; v1 > v; v1 -= n)
-                            *v1 /= temp;
+                    ep[i + 1] = E[i] / (D[i] - lambda[j] - E[i - 1] * ep[i]);
+                    eta[i + 1] = (E[i - 1] * eta[i] - d) / (D[i] - lambda[j] - E[i - 1] * ep[i]);
+                }
 
-                        *v = 1.0d;
-                    }
-                    else
-                        *v = temp;
+                eta[n] = (E[n - 2] * eta[n - 1] - d) / (D[n - 1] - lambda[j] - E[n - 2] * ep[n - 1]);
+
+                vector[(n - 1) * n + j - 1] = eta[n];
+                var norm = Sqr(eta[n]);
+
+                for (int i = n - 1; i > 1; i--)
+                {
+                    vector[(i - 1) * n - 1 + j] = ep[i] * vector[i * n - 1 + j] + eta[i];
+                    norm += Sqr(vector[(i - 1) * n - 1 + j]);
+                }
+
+            });
+
+            //Второй проход для большей точности
+            Parallel.For(0, n, j =>
+            //for (int j = 0; j < n; j++)
+            {
+                var ep = stackalloc double[n];
+                var eta = stackalloc double[n + 1];
+
+                ep[1] = *E / (*D - lambda[j]);
+                eta[1] = vector[j] / (*D - lambda[j]);
+
+                for (int i = 1; i < n - 1; i++)
+                {
+                    ep[i + 1] = E[i] / (D[i] - lambda[j] - E[i - 1] * ep[i]);
+                    eta[i + 1] = (E[i - 1] * eta[i] - vector[i * n + j]) / (D[i] - lambda[j] - E[i - 1] * ep[i]);
+                }
+
+                eta[n] = (E[n - 2] * eta[n - 1] - vector[n * n + j - n]) / (D[n - 1] - lambda[j] - E[n - 2] * ep[n - 1]);
+
+                vector[(n - 1) * n + j - 1] = eta[n];
+                var norm = Sqr(eta[n]);
+
+                for (int i = n - 1; i > 1; i--)
+                {
+                    vector[(i - 1) * n - 1 + j] = ep[i] * vector[i * n - 1 + j] + eta[i];
+                    norm += Sqr(vector[(i - 1) * n - 1 + j]);
                 }
 
             });
@@ -431,9 +441,7 @@ namespace ZhurParallelTDusF
                 double[][] newVectors = new double[ni][];
                 double[][] newLambdas = new double[ni][];
 
-                int k = 0;
-
-                for (int i = 0, j = 0; j < ni; i += (del + 1), j++, k += 2)
+                for (int i = 0, j = 0, k = 0; j < ni; i += (del + 1), j++, k += 2)
                 {
                     //Вычисление чисел и векторов
                     //Если j % 2 = 0, записываем первую строку
@@ -476,7 +484,6 @@ namespace ZhurParallelTDusF
                     else
                     {
                         double[] tempL = new double[del + tale];
-                        double[] tempV = new double[del + tale];
                         //Посчитать как 
                         fixed (double* oldL = lambdas[lambdas.Length - 1], oldV = vectors[vectors.Length - 1],
                                newL = newLambdas[ni - 1], newV = newVectors[ni - 1],
