@@ -163,40 +163,109 @@ namespace ZhurParallelTDusF
             //трехдиагональной матрицы, значения временно могут
             //выходить за рамки значений типа Double,
             //создаем матрицу специального типа.
-            BigDouble[,] vector = new BigDouble[n, n];
+            //BigDouble[,] vector = new BigDouble[n, n];
 
             //Вычисляем собственные вектора
             //трехдиагональной матрицы в BigDouble
             Parallel.For(0, n, j =>
             {
-                vector[0, j] = new BigDouble(1.0d, -100);
-                vector[1, j] = ((BigDouble)(L[j] - *D)) * vector[0, j] / (BigDouble)(*E);
+                //vector[0, j] = new BigDouble(1.0d, -100);
+                //vector[1, j] = ((BigDouble)(L[j] - *D)) * vector[0, j] / (BigDouble)(*E);
 
 
-                double* d = D + 1, e = E;
-                fixed (BigDouble* v = &vector[2, j])
-                    for (BigDouble* st = v, sp = v + (n - 3) * n + 1; st < sp; st += n, d++, e++)
-                    {
-                        *st = ((BigDouble)(L[j] - *d) * *(st - n) - (BigDouble)(*e) * *(st - n - n)) / (BigDouble)(*(e + 1));
-                    }
+                //double* d = D + 1, e = E;
+                //fixed (BigDouble* v = &vector[2, j])
+                //    for (BigDouble* st = v, sp = v + (n - 3) * n + 1; st < sp; st += n, d++, e++)
+                //    {
+                //        *st = ((BigDouble)(L[j] - *d) * *(st - n) - (BigDouble)(*e) * *(st - n - n)) / (BigDouble)(*(e + 1));
+                //    }
+
+                var d = Math.Sqrt(1.0 / n);
+
+                var ep = stackalloc double[n];
+                var eta = stackalloc double[n];
+
+                ep[1] = -(*E / (*D - L[j]));
+                eta[1] = d / (*D - L[j]);
+
+                //for (int i = 1; i < n - 1; i++)
+                for (double* step = ep + 2, steta = eta + 2, en = ep + n, e = E, _d = D + 1, l = L + j; step < en; steta++, step++, e++, _d++)
+                {
+                    //ep[i + 1] = -E[i] / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *step = -(*(e + 1) / (*_d - *l + (*e * *(step - 1))));
+                    //eta[i + 1] = (d - E[i - 1] * eta[i]) / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *steta = (d - (*e * *(steta - 1))) / (*_d - *l + (*e * *(step - 1)));
+                }
+                
+                //Получаем вектор
+                res[(n - 1) * n + j] = (d - E[n - 2] * eta[n - 1]) / (D[n - 1] - L[j] + E[n - 2] * ep[n - 1]);
+                var norm = Sqr(res[(n - 1) * n + j]);
+
+                for (double* v = res + (n - 1) * n + j, _ep = ep + n - 1, _eta = eta + n - 1, en = res + j; v > en; v -= n, _ep--, _eta--)
+                {
+                    *(v - n) = *_ep * *v + *_eta;
+                    norm += Sqr(*(v - n));
+                }
+
+                norm = Math.Sqrt(norm);
+
+                //Нормируем его
+                for (double* v = res + j, en = res + n * n; v < en; v -= n)
+                    *v = *v / norm;
+
+            });
+
+            //Второй проход для большей точности
+            Parallel.For(0, n, j =>
+            //for (int j = 0; j < n; j++)
+            {
+                var ep = stackalloc double[n];
+                var eta = stackalloc double[n];
+
+                ep[1] = -(*E / (*D - L[j]));
+                eta[1] = res[j] / (*D - L[j]);
+
+                //for (int i = 1; i < n - 1; i++)
+                for (double* step = ep + 2, steta = eta + 2, en = ep + n, e = E, _d = D + 1, l = L + j, v = res + n + j; step < en; steta++, step++, e++, _d++, v += n)
+                {
+                    //ep[i + 1] = -E[i] / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *step = -(*(e + 1) / (*_d - *l + (*e * *(step - 1))));
+                    //eta[i + 1] = (res[i * n + j] - E[i - 1] * eta[i]) / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *steta = (*v - (*e * *(steta - 1))) / (*_d - *l + (*e * *(step - 1)));
+                }
+                
+                res[(n - 1) * n + j] = (E[n - 2] * eta[n - 1] - res[n * n + j - n]) / (D[n - 1] - L[j] + E[n - 2] * ep[n - 1]);
+                var norm = Sqr(res[(n - 1) * n + j]);
+
+                for (double* v = res + (n - 1) * n + j, _ep = ep + n - 1, _eta = eta + n - 1, en = res + j; v > en; v -= n, _ep--, _eta--)
+                {
+                    *(v - n) = *_ep * *v + *_eta;
+                    norm += Sqr(*(v - n));
+                }
+
+                norm = Math.Sqrt(norm);
+
+                for (double* v = res + j, en = res + n * n; v < en; v -= n)
+                    *v = *v / norm;
             });
 
             //Нормируем вектора
-            fixed (BigDouble* v = &vector[0, 0])
-                NormVectorMatrixBD(v, n);
+            //fixed (BigDouble* v = &vector[0, 0])
+            //    NormVectorMatrixBD(v, n);
+
 
             //Преобразуем полученные значения
             //к станартному типу Double и 
             //заполняем соответствующую матрицу.
-            Parallel.For(0, n, i =>
-            {
-                double* r = res + i * n;
-                fixed (BigDouble* v = &vector[i, 0])
-                    for (BigDouble* st = v, sp = st + n; st < sp; st++, r++)
-                    {
-                        *r = (double)(*st);
-                    }
-            });
+            //Parallel.For(0, n, i =>
+            //{
+            //    double* r = res + i * n;
+            //    fixed (BigDouble* v = &vector[i, 0])
+            //        for (BigDouble* st = v, sp = st + n; st < sp; st++, r++)
+            //        {
+            //            *r = (double)(*st);
+            //        }
+            //});
         }
         #endregion 
 
