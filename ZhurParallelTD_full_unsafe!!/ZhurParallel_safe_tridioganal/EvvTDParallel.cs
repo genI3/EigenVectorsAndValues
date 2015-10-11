@@ -202,31 +202,38 @@ namespace ZhurParallelTDusF
             Parallel.For(0, n, j =>
             //for (int j = 0; j < n; j++)
             {
-                var d = 2e-6;
+                var d = Math.Sqrt(1.0 / n);
 
                 var ep = stackalloc double[n];
-                var eta = stackalloc double[n + 1];
+                var eta = stackalloc double[n];
 
-                ep[1] = *E / (*D - lambda[j]);
+                ep[1] = -(*E / (*D - lambda[j]));
                 eta[1] = d / (*D - lambda[j]);
 
-                for (int i = 1; i < n - 1; i++) 
+                //for (int i = 1; i < n - 1; i++) 
+                for (double* step = ep + 2, steta = eta + 2, en = ep + n, e = E, _d = D + 1, l = lambda + j; step < en; steta++, step++, e++, _d++ )
                 {
-                    ep[i + 1] = E[i] / (D[i] - lambda[j] - E[i - 1] * ep[i]);
-                    eta[i + 1] = (E[i - 1] * eta[i] - d) / (D[i] - lambda[j] - E[i - 1] * ep[i]);
+                    //ep[i + 1] = -E[i] / (D[i] - lambda[j] + E[i - 1] * ep[i]);
+                    *step = -(*(e + 1) / (*_d - *l + (*e * *(step - 1))));
+                    //eta[i + 1] = (d - E[i - 1] * eta[i]) / (D[i] - lambda[j] + E[i - 1] * ep[i]);
+                    *steta = (d - (*e * *(steta - 1))) / (*_d - *l + (*e * *(step - 1)));
+                }
+                
+                vector[(n - 1) * n + j] = (d - E[n - 2] * eta[n - 1]) / (D[n - 1] - lambda[j] + E[n - 2] * ep[n - 1]); ;
+                var norm = Sqr(vector[(n - 1) * n + j]);
+
+                //for (int i = n - 1; i > 1; i--)
+                for (double* v = vector + (n - 1) * n + j, _ep = ep + n - 1, _eta = eta + n - 1, en = vector + j ; v > en ; v -= n, _ep--, _eta--)
+                {
+                    *(v - n) = *_ep * *v + *_eta;
+                    norm += Sqr(*(v - n));
                 }
 
-                eta[n] = (E[n - 2] * eta[n - 1] - d) / (D[n - 1] - lambda[j] - E[n - 2] * ep[n - 1]);
+                norm = Math.Sqrt(norm);
 
-                vector[(n - 1) * n + j - 1] = eta[n];
-                var norm = Sqr(eta[n]);
-
-                for (int i = n - 1; i > 1; i--)
-                {
-                    vector[(i - 1) * n - 1 + j] = ep[i] * vector[i * n - 1 + j] + eta[i];
-                    norm += Sqr(vector[(i - 1) * n - 1 + j]);
-                }
-
+                //for (int i = 0; i < n; i++)
+                for(double* v = vector + j, en = vector + n * n; v < en; v -= n)
+                    *v = *v / norm;
             });
 
             //Второй проход для большей точности
@@ -234,26 +241,25 @@ namespace ZhurParallelTDusF
             //for (int j = 0; j < n; j++)
             {
                 var ep = stackalloc double[n];
-                var eta = stackalloc double[n + 1];
+                var eta = stackalloc double[n];
 
-                ep[1] = *E / (*D - lambda[j]);
+                ep[1] = -(*E / (*D - lambda[j]));
                 eta[1] = vector[j] / (*D - lambda[j]);
 
-                for (int i = 1; i < n - 1; i++)
+                //for (int i = 1; i < n - 1; i++)
+                for (double* step = ep + 2, steta = eta + 2, en = ep + n, e = E, _d = D + 1, l = lambda + j, v = vector + n + j; step < en; steta++, step++, e++, _d++, v += n)
                 {
-                    ep[i + 1] = E[i] / (D[i] - lambda[j] - E[i - 1] * ep[i]);
-                    eta[i + 1] = (E[i - 1] * eta[i] - vector[i * n + j]) / (D[i] - lambda[j] - E[i - 1] * ep[i]);
+                    //ep[i + 1] = E[i] / (D[i] - lambda[j] + E[i - 1] * ep[i]);
+                    *step = -(*(e + 1) / (*_d - *l + (*e * *(step - 1))));
+                    //eta[i + 1] = (vector[i * n + j] - E[i - 1] * eta[i]) / (D[i] - lambda[j] + E[i - 1] * ep[i]);
+                    *steta = (*v - (*e * *(steta - 1))) / (*_d - *l + (*e * *(step - 1)));
                 }
 
-                eta[n] = (E[n - 2] * eta[n - 1] - vector[n * n + j - n]) / (D[n - 1] - lambda[j] - E[n - 2] * ep[n - 1]);
+                vector[(n - 1) * n + j] = (vector[n * n + j - n] - E[n - 2] * eta[n - 1]) / (D[n - 1] - lambda[j] + E[n - 2] * ep[n - 1]);
 
-                vector[(n - 1) * n + j - 1] = eta[n];
-                var norm = Sqr(eta[n]);
-
-                for (int i = n - 1; i > 1; i--)
+                for (double* v = vector + (n - 1) * n + j, _ep = ep + n - 1, _eta = eta + n - 1, en = vector + j; v > en; v -= n, _ep--, _eta--)
                 {
-                    vector[(i - 1) * n - 1 + j] = ep[i] * vector[i * n - 1 + j] + eta[i];
-                    norm += Sqr(vector[(i - 1) * n - 1 + j]);
+                    *(v - n) = *_ep * *v + *_eta;
                 }
 
             });

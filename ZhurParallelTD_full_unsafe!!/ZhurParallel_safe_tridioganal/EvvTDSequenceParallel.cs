@@ -180,35 +180,38 @@ namespace ZhurParallelTDusF
                 //        *st = ((BigDouble)(L[j] - *d) * *(st - n) - (BigDouble)(*e) * *(st - n - n)) / (BigDouble)(*(e + 1));
                 //    }
 
-                var d = 2e-6;
+                var d = Math.Sqrt(1.0 / n);
 
                 var ep = stackalloc double[n];
-                var eta = stackalloc double[n + 1];
+                var eta = stackalloc double[n];
 
-                ep[1] = *E / (*D - L[j]);
+                ep[1] = -(*E / (*D - L[j]));
                 eta[1] = d / (*D - L[j]);
 
-                for (int i = 1; i < n - 1; i++)
+                //for (int i = 1; i < n - 1; i++)
+                for (double* step = ep + 2, steta = eta + 2, en = ep + n, e = E, _d = D + 1, l = L + j; step < en; steta++, step++, e++, _d++)
                 {
-                    ep[i + 1] = E[i] / (D[i] - L[j] - E[i - 1] * ep[i]);
-                    eta[i + 1] = (E[i - 1] * eta[i] - d) / (D[i] - L[j] - E[i - 1] * ep[i]);
+                    //ep[i + 1] = -E[i] / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *step = -(*(e + 1) / (*_d - *l + (*e * *(step - 1))));
+                    //eta[i + 1] = (d - E[i - 1] * eta[i]) / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *steta = (d - (*e * *(steta - 1))) / (*_d - *l + (*e * *(step - 1)));
                 }
-
-                eta[n] = (E[n - 2] * eta[n - 1] - d) / (D[n - 1] - L[j] - E[n - 2] * ep[n - 1]);
-
+                
                 //Получаем вектор
-                res[(n - 1) * n + j - 1] = eta[n];
-                var norm = Sqr(eta[n]);
+                res[(n - 1) * n + j] = (d - E[n - 2] * eta[n - 1]) / (D[n - 1] - L[j] + E[n - 2] * ep[n - 1]);
+                var norm = Sqr(res[(n - 1) * n + j]);
 
-                for (int i = n - 1; i > 0; i--)
+                for (double* v = res + (n - 1) * n + j, _ep = ep + n - 1, _eta = eta + n - 1, en = res + j; v > en; v -= n, _ep--, _eta--)
                 {
-                    res[(i - 1) * n + j] = ep[i] * res[i * n - 1 + j] + eta[i];
-                    norm += Sqr(res[(i - 1) * n + j]);
+                    *(v - n) = *_ep * *v + *_eta;
+                    norm += Sqr(*(v - n));
                 }
+
+                norm = Math.Sqrt(norm);
 
                 //Нормируем его
-                for (int i = 0; i < n; i++)
-                    res[i * n + j] /= norm;
+                for (double* v = res + j, en = res + n * n; v < en; v -= n)
+                    *v = *v / norm;
 
             });
 
@@ -217,28 +220,33 @@ namespace ZhurParallelTDusF
             //for (int j = 0; j < n; j++)
             {
                 var ep = stackalloc double[n];
-                var eta = stackalloc double[n + 1];
+                var eta = stackalloc double[n];
 
-                ep[1] = *E / (*D - L[j]);
+                ep[1] = -(*E / (*D - L[j]));
                 eta[1] = res[j] / (*D - L[j]);
 
-                for (int i = 1; i < n - 1; i++)
+                //for (int i = 1; i < n - 1; i++)
+                for (double* step = ep + 2, steta = eta + 2, en = ep + n, e = E, _d = D + 1, l = L + j, v = res + n + j; step < en; steta++, step++, e++, _d++, v += n)
                 {
-                    ep[i + 1] = E[i] / (D[i] - L[j] - E[i - 1] * ep[i]);
-                    eta[i + 1] = (E[i - 1] * eta[i] - res[i * n + j]) / (D[i] - L[j] - E[i - 1] * ep[i]);
+                    //ep[i + 1] = -E[i] / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *step = -(*(e + 1) / (*_d - *l + (*e * *(step - 1))));
+                    //eta[i + 1] = (res[i * n + j] - E[i - 1] * eta[i]) / (D[i] - L[j] + E[i - 1] * ep[i]);
+                    *steta = (*v - (*e * *(steta - 1))) / (*_d - *l + (*e * *(step - 1)));
+                }
+                
+                res[(n - 1) * n + j] = (E[n - 2] * eta[n - 1] - res[n * n + j - n]) / (D[n - 1] - L[j] + E[n - 2] * ep[n - 1]);
+                var norm = Sqr(res[(n - 1) * n + j]);
+
+                for (double* v = res + (n - 1) * n + j, _ep = ep + n - 1, _eta = eta + n - 1, en = res + j; v > en; v -= n, _ep--, _eta--)
+                {
+                    *(v - n) = *_ep * *v + *_eta;
+                    norm += Sqr(*(v - n));
                 }
 
-                eta[n] = (E[n - 2] * eta[n - 1] - res[n * n + j - n]) / (D[n - 1] - L[j] - E[n - 2] * ep[n - 1]);
+                norm = Math.Sqrt(norm);
 
-                res[(n - 1) * n + j - 1] = eta[n];
-                var norm = Sqr(eta[n]);
-
-                for (int i = n - 1; i > 1; i--)
-                {
-                    res[(i - 1) * n - 1 + j] = ep[i] * res[i * n - 1 + j] + eta[i];
-                    norm += Sqr(res[(i - 1) * n - 1 + j]);
-                }
-
+                for (double* v = res + j, en = res + n * n; v < en; v -= n)
+                    *v = *v / norm;
             });
 
             //Нормируем вектора
