@@ -166,11 +166,7 @@ namespace ZhurParallelTDusF
                 return L1;
 
             double lambda = 0.0d;
-
-            var tempA = stackalloc double[n - 1];
-            for (double* start = a, stop = a + n - 1, _a = tempA; start < stop; start++, _a++)
-                *_a = Sqr(*start);
-
+            
             //Получаем максимальное значение делений на 2,
             //достаточных для нахождения собственного числа
             //с заданной точностью:
@@ -186,34 +182,35 @@ namespace ZhurParallelTDusF
                 _N = Math.Log((L2 - L1) / epsilon);
                 N = (int)Math.Ceiling(_N * 3.32192809488736d);
             }
-            
-            
+
+
             //Основной цикл нахождения собственного 
             //значения на заданном интервале.
-            for (int j = 0; j < N + 1; j++)
-            {
-                //Предполагаемое значение.
-                lambda = (L2 + L1) * 0.5d;
+            
+                for (int j = 0; j < N + 1; j++)
+                {
+                    //Предполагаемое значение.
+                    lambda = (L2 + L1) * 0.5d;
 
-                double temp = d[n - 1];
+                    double temp = d[n - 1];
 
-                //Подставляем значение lambda в уравнение G(λ) = D + (A1*A1)/(λ-λ1) + (A2*A2)/(λ-λ2) +...+ (Ak*Ak)/(λ-λk),
-                //где λi - собственное значение матрицы Bk, Ai - значение массива A.    
+                    //Подставляем значение lambda в уравнение G(λ) = D + (A1*A1)/(λ-λ1) + (A2*A2)/(λ-λ2) +...+ (Ak*Ak)/(λ-λk),
+                    //где λi - собственное значение матрицы Bk, Ai - значение массива A.    
 
-                for (double* _a = tempA, _a_end = tempA + n - 1, _d = d; _a < _a_end; _a++, _d++)
-                    temp += *_a / (lambda - *_d);
+                    for (double* _a = a, _a_end = a + n - 1, _d = d; _a < _a_end; _a++, _d++)
+                        temp += Sqr(*_a) / (lambda - *_d);
 
-                //Если |G(λ) - λ| < epsilon - собственное число с точностью epsilon
-                //найдено - завершение цикла.
-                if (Math.Abs(temp - lambda) <= epsilon)
-                    break;
+                    //Если |G(λ) - λ| < epsilon - собственное число с точностью epsilon
+                    //найдено - завершение цикла.
+                    if (Math.Abs(temp - lambda) <= epsilon)
+                        break;
 
-                //Иначе уменьшаем интервал в двое вправо или влево.
-                if (temp - lambda > 0.0d)
-                    L1 = lambda;
-                else
-                    L2 = lambda;
-            }
+                    //Иначе уменьшаем интервал в двое вправо или влево.
+                    if (temp - lambda > 0.0d)
+                        L1 = lambda;
+                    else
+                        L2 = lambda;
+                }           
 
             //Возвращаем найденное собственное значение.
             return lambda;
@@ -249,7 +246,7 @@ namespace ZhurParallelTDusF
             if (n == 2)
             {
                 fixed (double* l = lambda, v = vector, _a = A)
-                EigenValueAndVector2x2(_a, l, v);
+                    EigenValueAndVector2x2(_a, l, v);
                 return true;
             }
             

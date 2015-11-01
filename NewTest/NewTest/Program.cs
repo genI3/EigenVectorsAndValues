@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using evvTdTemp;
 using System.IO;
 using ZhurParallelTDusF;
 
@@ -13,7 +12,7 @@ namespace NewTest
     {
         static void Main(string[] args)
         {
-            int n = 70;
+            int n = 15000;
             
             double[] d;
             double[] e;
@@ -23,17 +22,20 @@ namespace NewTest
 
             //RandomTridiagonalMatrix(n, -13.6d, 10.3d, 0);
 
-            //FileStream fs = new FileStream("arrays.txt", FileMode.Open);
-            //using (fs)
+
+            //using (StreamReader sr = new StreamReader("arrays.txt"))
             //{
-            //    BinaryReader br = new BinaryReader(fs);
-            //    int n1 = br.ReadInt32();
+            //    //BinaryReader br = new BinaryReader(fs);
+            //    var data = sr.ReadToEnd().Split(new char[] { '\n' });
+            //    int n1 = int.Parse(data[0]);// ReadInt32();
 
+            //    d = new double[n1];
             //    for (int i = 0; i < n1; i++)
-            //        d[i] = br.ReadDouble();
+            //        d[i] = double.Parse(data[i + 1]);//br.ReadDouble();
 
+            //    e = new double[n1 - 1];
             //    for (int i = 0; i < n1 - 1; i++)
-            //        e[i] = br.ReadDouble();
+            //        e[i] = double.Parse(data[i + 1 + n1]);
             //}
 
             RandomTridiagonalMatrix(n, -13.6d, 10.3d, 0, out d, out e);
@@ -105,20 +107,21 @@ namespace NewTest
             if (File.Exists("arrays.txt"))
                 File.Delete("arrays.txt");
 
-            FileStream fs = new FileStream("arrays.txt", FileMode.OpenOrCreate);
-            using (fs)
+            //FileStream fs = new FileStream("arrays.txt", FileMode.OpenOrCreate);
+            using (var sr = new StreamWriter("arrays.txt"))
             {
-                BinaryWriter bw = new BinaryWriter(fs);
+                // BinaryWriter bw = new BinaryWriter(fs);
+                //StreamWriter sr = new StreamWriter(fs);
 
-                bw.Write(n);
+                sr.WriteLine(n.ToString());
                 for (int i = 0; i < n; i++)
                 {
-                    bw.Write(d[i]);
+                    sr.WriteLine(d[i].ToString());
                 }
-                                
+
                 for (int i = 0; i < n - 1; i++)
                 {
-                    bw.Write(e[i]);
+                    sr.WriteLine(e[i].ToString());
                 }
             }
         }

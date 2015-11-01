@@ -42,20 +42,25 @@ namespace ZhurParallelTDusF
         /// <param name="n">Размерность матрицы.</param>
         static void FormAColumnAdd(double* AN, double* V, int n)
         {
-            var tempA = stackalloc double[n - 1];
+            var tempA = new double[n - 1];
 
-            Parallel.For(0, n, i =>
+            fixed (double* ta = tempA)
             {
-                var temp = 0.0d;
-                for (int m = 0; m < n; m++)
-                    temp += AN[m] * V[m * n + i];
-                tempA[i] = temp;
-            });
+                var tA = ta;
 
-            Parallel.For(0, n, i =>
-            {
-                AN[i] = tempA[i];
-            });
+                Parallel.For(0, n, i =>
+                {
+                    var temp = 0.0d;
+                    for (int m = 0; m < n; m++)
+                        temp += AN[m] * V[m * n + i];
+                    tA[i] = temp;
+                });
+
+                Parallel.For(0, n, i =>
+                {
+                    AN[i] = tA[i];
+                });
+            }
         }
         #endregion
 

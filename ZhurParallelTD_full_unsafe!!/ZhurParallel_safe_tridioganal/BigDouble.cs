@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace ZhurParallelTDusF
@@ -34,9 +35,9 @@ namespace ZhurParallelTDusF
         {
             var sa = S.Split(new char[] { 'E' });            
 
-            this.x = Double.Parse(sa[0]);
+            this.x = Double.Parse(sa[0], CultureInfo.InvariantCulture);
             if (sa.Length > 1)
-                this.y = int.Parse(sa[1]);
+                this.y = int.Parse(sa[1], CultureInfo.InvariantCulture);
             else
                 this.y = 0;
 
@@ -81,7 +82,7 @@ namespace ZhurParallelTDusF
 
 
         //Перегрузка соотвествующих операторов
-
+        
         public static BigDouble operator +(BigDouble d1, BigDouble d2)
         {
             if (d1.Y > d2.Y)
@@ -174,7 +175,7 @@ namespace ZhurParallelTDusF
 
         public static explicit operator BigDouble(double d)
         {
-                return new BigDouble(d.ToString());           
+                return new BigDouble(d.ToString(CultureInfo.InvariantCulture));           
         }
 
         public static explicit operator double(BigDouble d)
@@ -318,9 +319,9 @@ namespace ZhurParallelTDusF
         public override string ToString()
         {
             if (this.Y != 0)
-                return String.Format("{0}E{1}", this.X, this.Y);
+                return String.Format(CultureInfo.InvariantCulture, "{0}E{1}", this.X, this.Y);
 
-            return this.X.ToString();
+            return X.ToString(CultureInfo.InvariantCulture);
         }
     }
 }
